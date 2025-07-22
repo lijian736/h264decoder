@@ -155,8 +155,64 @@ int revise_slice_type_mb_type(int32_t slice_type, int32_t mb_type, int32_t* revi
  * @param slice_header pointer to the slice header
  * @param cabac pointer to the CABAC
  * @param CurrMbAddr the current macroblock address
+ * @param NumMbPart the macroblock partition number
  * @return int 0 on success, negative value on error
  */
-int mb_pred(RBSPReader* rbsp_reader, FrameOrField* picture, MacroBlock* mb, SliceHeader* slice_header, CABAC* cabac, int32_t CurrMbAddr);
+int mb_pred(RBSPReader* rbsp_reader, FrameOrField* picture, MacroBlock* mb, SliceHeader* slice_header, CABAC* cabac, int32_t CurrMbAddr, int32_t NumMbPart);
+
+/**
+ * @brief residual data
+ * @see 7.3.5.3 Residual data syntax
+ * @see 7.4.5.3 Residual data semantics
+ *
+ * @param rbsp_reader the RBSPReader
+ * @param picture pointer to the FrameOrField
+ * @param mb the macroblock
+ * @param slice_header pointer to the slice header
+ * @param cabac pointer to the CABAC
+ * @param CurrMbAddr the current macroblock address
+ * @param startIdx the start index
+ * @param endIdx the end index
+ * @return int 0 on success, negative value on error
+ */
+int residual(RBSPReader* rbsp_reader, FrameOrField* picture, MacroBlock* mb, SliceHeader* slice_header, CABAC* cabac, int32_t CurrMbAddr, int32_t startIdx, int32_t endIdx);
+
+/**
+ * @brief residual luma
+ *
+ * @see 7.3.5.3.1 Residual luma syntax
+ * @see 7.4.5.3.1 Residual luma data semantics
+ *
+ * @param rbsp_reader the RBSPReader
+ * @param picture pointer to the FrameOrField
+ * @param mb the macroblock
+ * @param slice_header pointer to the slice header
+ * @param cabac pointer to the CABAC
+ * @param CurrMbAddr the current macroblock address
+ * @param startIdx the start index
+ * @param endIdx the end index
+ * @return int 0 on success, negative value on error
+ */
+int residual_luma(RBSPReader* rbsp_reader, FrameOrField* picture, MacroBlock* mb, SliceHeader* slice_header, CABAC* cabac, int32_t CurrMbAddr, int32_t startIdx, int32_t endIdx);
+
+/**
+ * @brief residual block cabac
+ * @see 7.3.5.3.3 Residual block CABAC syntax
+ * @see 7.4.5.3.3 Residual block CABAC semantics
+ * 
+ * @param rbsp_reader the RBSPReader
+ * @param picture pointer to the FrameOrField
+ * @param mb the macroblock
+ * @param slice_header pointer to the slice header
+ * @param cabac pointer to the CABAC
+ * @param CurrMbAddr the current macroblock address
+ * @param coeffLevel the coefficient level
+ * @param startIdx the start index
+ * @param endIdx the end index
+ * @param maxNumCoeff the max number of coeff
+ * @return int 0 on success, negative value on error
+ */
+int residual_block_cabac(RBSPReader* rbsp_reader, FrameOrField* picture, MacroBlock* mb, SliceHeader* slice_header, CABAC* cabac, int32_t CurrMbAddr, int32_t* coeffLevel,
+                         int32_t startIdx, int32_t endIdx, int32_t maxNumCoeff);
 
 #endif

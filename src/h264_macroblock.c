@@ -505,7 +505,7 @@ int revise_slice_type_mb_type(int32_t slice_type, int32_t mb_type, int32_t* revi
     return ERR_OK;
 }
 
-int mb_pred(RBSPReader* rbsp_reader, FrameOrField* picture, MacroBlock* mb, SliceHeader* slice_header, CABAC* cabac, int32_t CurrMbAddr){
+int mb_pred(RBSPReader* rbsp_reader, FrameOrField* picture, MacroBlock* mb, SliceHeader* slice_header, CABAC* cabac, int32_t CurrMbAddr, int32_t NumMbPart) {
     int err_code = ERR_OK;
 
     PPS* pps = slice_header->pps;
@@ -513,20 +513,126 @@ int mb_pred(RBSPReader* rbsp_reader, FrameOrField* picture, MacroBlock* mb, Slic
     int32_t slice_type = (int32_t)slice_header->slice_type;
 
     H264_MB_PART_PRED_MODE pred_type = mb->mb_pred_type;
+    uint8_t is_entropy_coding = pps->entropy_coding_mode_flag;
 
-    if(pred_type == Intra_4x4 || pred_type == Intra_8x8 || pred_type == Intra_16x16){
-        if(pred_type == Intra_4x4){
+    if (pred_type == Intra_4x4 || pred_type == Intra_8x8 || pred_type == Intra_16x16) {
+        if (pred_type == Intra_4x4) {
+            for (int luma4x4BlkIdx = 0; luma4x4BlkIdx < 16; ++luma4x4BlkIdx) {
+                int32_t prev_intra4x4_pred_mode_flag;
+                if (is_entropy_coding) {
+                    err_code = cabac_prev_intra4x4_or_intra8x8_pred_mode_flag(rbsp_reader, cabac, &prev_intra4x4_pred_mode_flag);
+                    if (err_code < 0) {
+                        return err_code;
+                    }
+                } else {
+                    prev_intra4x4_pred_mode_flag = (int32_t)read_u(rbsp_reader, 1);
+                }
 
+                mb->prev_intra4x4_pred_mode_flag[luma4x4BlkIdx] = prev_intra4x4_pred_mode_flag;
+
+                if (!prev_intra4x4_pred_mode_flag) {
+                    int32_t rem_pred_mode;
+                    if (is_entropy_coding) {
+                        err_code = cabac_rem_intra4x4_or_intra8x8_pred_mode(rbsp_reader, cabac, &rem_pred_mode);
+                        if (err_code < 0) {
+                            return err_code;
+                        }
+                    } else {
+                        rem_pred_mode = (int32_t)read_u(rbsp_reader, 3);
+                    }
+
+                    mb->rem_intra4x4_pred_mode[luma4x4BlkIdx] = rem_pred_mode;
+                }
+            }
         }
 
-        if(pred_type == Intra_8x8){
+        if (pred_type == Intra_8x8) {
+            for (int luma8x8BlkIdx = 0; luma8x8BlkIdx < 4; ++luma8x8BlkIdx) {
+                int32_t prev_intra8x8_pred_mode_flag;
+                if (is_entropy_coding) {
+                    err_code = cabac_prev_intra4x4_or_intra8x8_pred_mode_flag(rbsp_reader, cabac, &prev_intra8x8_pred_mode_flag);
+                    if (err_code < 0) {
+                        return err_code;
+                    }
+                } else {
+                    prev_intra8x8_pred_mode_flag = (int32_t)read_u(rbsp_reader, 1);
+                }
 
+                mb->prev_intra8x8_pred_mode_flag[luma8x8BlkIdx] = prev_intra8x8_pred_mode_flag;
+
+                if (!prev_intra8x8_pred_mode_flag) {
+                    int32_t rem_pred_mode;
+                    if (is_entropy_coding) {
+                        err_code = cabac_rem_intra4x4_or_intra8x8_pred_mode(rbsp_reader, cabac, &rem_pred_mode);
+                        if (err_code < 0) {
+                            return err_code;
+                        }
+                    } else {
+                        rem_pred_mode = (int32_t)read_u(rbsp_reader, 3);
+                    }
+
+                    mb->rem_intra8x8_pred_mode[luma8x8BlkIdx] = rem_pred_mode;
+                }
+            }
         }
 
-        if(sps->ChromaArrayType == 1 || sps->ChromaArrayType == 2){
-            
+        if (sps->ChromaArrayType == 1 || sps->ChromaArrayType == 2) {
+            int32_t intra_chroma_pred_mode;
+            if (is_entropy_coding) {
+                err_code = cabac_intra_chroma_pred_mode(rbsp_reader, cabac, picture, slice_header, CurrMbAddr, &intra_chroma_pred_mode);
+            } else {
+                intra_chroma_pred_mode = (int32_t)read_ue(rbsp_reader);
+            }
+
+            mb->intra_chroma_pred_mode = intra_chroma_pred_mode;
+        }
+    } else if (pred_type == Direct) {
+        for (int mbPartIdx = 0; mbPartIdx < NumMbPart; mbPartIdx++) {
+        }
+
+        for (int mbPartIdx = 0; mbPartIdx < NumMbPart; mbPartIdx++) {
+        }
+
+        for (int mbPartIdx = 0; mbPartIdx < NumMbPart; mbPartIdx++) {
+        }
+
+        for (int mbPartIdx = 0; mbPartIdx < NumMbPart; mbPartIdx++) {
+        }
+
+        return ERR_NOT_IMPL;
+    }
+
+    return ERR_OK;
+}
+
+int residual(RBSPReader* rbsp_reader, FrameOrField* picture, MacroBlock* mb, SliceHeader* slice_header, CABAC* cabac, int32_t CurrMbAddr, int32_t startIdx, int32_t endIdx) {
+    int err_code = ERR_OK;
+
+    uint8_t is_entropy_coding = slice_header->pps->entropy_coding_mode_flag;
+
+    return ERR_OK;
+}
+
+int residual_luma(RBSPReader* rbsp_reader, FrameOrField* picture, MacroBlock* mb, SliceHeader* slice_header, CABAC* cabac, int32_t CurrMbAddr, int32_t startIdx, int32_t endIdx) {
+    int err_code = ERR_OK;
+
+    uint8_t is_entropy_coding = slice_header->pps->entropy_coding_mode_flag;
+
+    if (startIdx == 0 && mb->mb_pred_type == Intra_16x16) {
+        if (is_entropy_coding) {
+            /* residual_block */
+        } else {
+            /* residual_block */
         }
     }
+
+    return ERR_OK;
+}
+
+int residual_block_cabac(RBSPReader* rbsp_reader, FrameOrField* picture, MacroBlock* mb, SliceHeader* slice_header, CABAC* cabac, int32_t CurrMbAddr, int32_t* coeffLevel,
+                         int32_t startIdx, int32_t endIdx, int32_t maxNumCoeff){
+    int err_code = ERR_OK;
+
 
     return ERR_OK;
 }

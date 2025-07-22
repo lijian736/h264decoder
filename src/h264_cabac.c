@@ -836,6 +836,142 @@ int cabac_mb_qp_delta(RBSPReader* rbsp_reader, CABAC* cabac, FrameOrField* pictu
     return ERR_OK;
 }
 
+int cabac_prev_intra4x4_or_intra8x8_pred_mode_flag(RBSPReader* rbsp_reader, CABAC* cabac, int32_t* out_syntax_element) {
+    int err_code = ERR_OK;
+
+    int32_t maxBinIdxCtx = 0;
+    int32_t ctxIdxOffset = 0;
+    int32_t ctxIdxInc = 0;
+    int32_t binVal = 0;
+    int32_t ctxIdx = 0;
+    int32_t bypassFlag = 0;
+
+    /* Table 9-34 – Syntax elements and associated types of binarization, maxBinIdxCtx, and ctxIdxOffset */
+    /* Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag,
+     * last_significant_coeff_flag, and coeff_abs_level_minus1 */
+
+    /* Type of binarization: FL, cMax=1 */
+    /* maxBinIdxCtx: 0 */
+    /* ctxIdxOffset: 68 */
+    maxBinIdxCtx = 0;
+    ctxIdxOffset = 68;
+
+    ctxIdxInc = 0;
+    ctxIdx = ctxIdxOffset + ctxIdxInc;
+
+    err_code = DecodeBin(rbsp_reader, cabac, bypassFlag, ctxIdx, &binVal);
+    if (err_code < 0) {
+        return err_code;
+    }
+
+    *out_syntax_element = binVal;
+
+    return ERR_OK;
+}
+
+int cabac_rem_intra4x4_or_intra8x8_pred_mode(RBSPReader* rbsp_reader, CABAC* cabac, int32_t* out_syntax_element) {
+    int err_code = ERR_OK;
+
+    int32_t maxBinIdxCtx = 0;
+    int32_t ctxIdxOffset = 0;
+    int32_t ctxIdxInc = 0;
+    int32_t binVal = 0;
+    int32_t ctxIdx = 0;
+    int32_t bypassFlag = 0;
+
+    /* Table 9-34 – Syntax elements and associated types of binarization, maxBinIdxCtx, and ctxIdxOffset */
+    /* Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag,
+     * last_significant_coeff_flag, and coeff_abs_level_minus1 */
+
+    /* Type of binarization: FL, cMax=7 */
+    /* maxBinIdxCtx: 0 */
+    /* ctxIdxOffset: 69 */
+    maxBinIdxCtx = 0;
+    ctxIdxOffset = 69;
+
+    ctxIdxInc = 0;
+    ctxIdx = ctxIdxOffset + ctxIdxInc;
+
+    err_code = DecodeBin(rbsp_reader, cabac, bypassFlag, ctxIdx, &binVal);
+    if (err_code < 0) {
+        return err_code;
+    }
+    *out_syntax_element = binVal;
+
+    err_code = DecodeBin(rbsp_reader, cabac, bypassFlag, ctxIdx, &binVal);
+    if (err_code < 0) {
+        return err_code;
+    }
+    *out_syntax_element += (binVal << 1);
+
+    err_code = DecodeBin(rbsp_reader, cabac, bypassFlag, ctxIdx, &binVal);
+    if (err_code < 0) {
+        return err_code;
+    }
+    *out_syntax_element += (binVal << 2);
+
+    return ERR_OK;
+}
+
+int cabac_intra_chroma_pred_mode(RBSPReader* rbsp_reader, CABAC* cabac, FrameOrField* picture, SliceHeader* slice_header, int32_t CurrMbAddr, int32_t* out_syntax_element) {
+    int err_code = ERR_OK;
+
+    int32_t maxBinIdxCtx = 0;
+    int32_t ctxIdxOffset = 0;
+    int32_t ctxIdxInc = 0;
+    int32_t binVal = 0;
+    int32_t ctxIdx = 0;
+    int32_t bypassFlag = 0;
+
+    /* Table 9-34 – Syntax elements and associated types of binarization, maxBinIdxCtx, and ctxIdxOffset */
+    /* Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag,
+     * last_significant_coeff_flag, and coeff_abs_level_minus1 */
+
+    /* Type of binarization: TU, cMax=3 */
+    /* maxBinIdxCtx: 1 */
+    /* ctxIdxOffset: 64*/
+
+    /* 9.3.3.1.1.8 Derivation process of ctxIdxInc for the syntax element intra_chroma_pred_mode */
+    err_code = derivation_for_ctxIdxInc_intra_chroma_pred_mode(picture, slice_header, CurrMbAddr, &ctxIdxInc);
+    if (err_code < 0) {
+        return err_code;
+    }
+
+    ctxIdx = ctxIdxOffset + ctxIdxInc;
+    err_code = DecodeBin(rbsp_reader, cabac, bypassFlag, ctxIdx, &binVal);
+    if (err_code < 0) {
+        return err_code;
+    }
+
+    if (binVal == 0) {
+        *out_syntax_element = 0;
+    } else {
+        ctxIdx = ctxIdxOffset + 3;
+        err_code = DecodeBin(rbsp_reader, cabac, bypassFlag, ctxIdx, &binVal);
+        if (err_code < 0) {
+            return err_code;
+        }
+
+        if (binVal == 0) {
+            *out_syntax_element = 1;
+        } else {
+            ctxIdx = ctxIdxOffset + 3;
+            err_code = DecodeBin(rbsp_reader, cabac, bypassFlag, ctxIdx, &binVal);
+            if (err_code < 0) {
+                return err_code;
+            }
+
+            if (binVal == 0) {
+                *out_syntax_element = 2;
+            } else {
+                *out_syntax_element = 3;
+            }
+        }
+    }
+
+    return ERR_OK;
+}
+
 int cabac_end_of_slice_flag(RBSPReader* rbsp_reader, CABAC* cabac, int32_t* out_syntax_element) {
     int err_code = ERR_OK;
 
@@ -1000,6 +1136,36 @@ int cabac_coded_block_pattern(RBSPReader* rbsp_reader, CABAC* cabac, FrameOrFiel
     }
 
     *out_syntax_element = CodedBlockPatternLuma + CodedBlockPatternChroma * 16;
+
+    return ERR_OK;
+}
+
+int cabac_coded_block_flag(RBSPReader* rbsp_reader, CABAC* cabac, FrameOrField* picture, SliceHeader* slice_header, int32_t CurrMbAddr, int32_t ctxBlockCat, int32_t xBlkIdx,
+                           int32_t iCbCr, int32_t* out_syntax_element) {
+    int err_code = ERR_OK;
+
+    /* Table 9-34 – Syntax elements and associated types of binarization, maxBinIdxCtx, and ctxIdxOffset */
+
+    /* (blocks with ctxBlockCat < 5)*/
+    /* Type of binarization: FL, cMax=1 */
+    /* maxBinIdxCtx: 0 */
+    /* ctxIdxOffset: 85 */
+
+    /* (5 < ctxBlockCat < 9) */
+    /* Type of binarization: FL, cMax=1 */
+    /* maxBinIdxCtx: 0 */
+    /* ctxIdxOffset: 460 */
+
+    /* (9 < ctxBlockCat < 13) */
+    /* Type of binarization: FL, cMax=1 */
+    /* maxBinIdxCtx: 0 */
+    /* ctxIdxOffset: 472 */
+
+    /* (ctxBlockCat = 5, 9, or 13) */
+    /* Type of binarization: FL, cMax=1 */
+    /* maxBinIdxCtx: 0 */
+    /* ctxIdxOffset: 1012 */
+
 
     return ERR_OK;
 }
@@ -1319,6 +1485,69 @@ int derivation_for_ctxIdxInc_mb_qp_delta(FrameOrField* picture, SliceHeader* sli
     return ERR_OK;
 }
 
+/* 9.3.3.1.1.8 Derivation process of ctxIdxInc for the syntax element intra_chroma_pred_mode */
+int derivation_for_ctxIdxInc_intra_chroma_pred_mode(FrameOrField* picture, SliceHeader* slice_header, int32_t CurrMbAddr, int32_t* out_ctxIdxInc) {
+    int err_code = ERR_OK;
+
+    SPS* sps = slice_header->sps;
+    PPS* pps = slice_header->pps;
+
+    int32_t mbAddrA = 0;
+    int32_t mbAddrB = 0;
+
+    int32_t is_chroma = 0;
+
+    /* 6.4.11.1 Derivation process for neighbouring macroblocks */
+    neighbouring_macroblocks(slice_header->MbaffFrameFlag, CurrMbAddr, !picture->mb_list[CurrMbAddr].mb_field_decoding_flag, sps->PicWidthInMbs, picture->mb_slice_ids,
+                             picture->mb_frame_flags, is_chroma, sps->MbWidthC, sps->MbHeightC, &mbAddrA, &mbAddrB);
+
+    int32_t condTermFlagA = 0;
+    int32_t condTermFlagB = 0;
+
+    if (mbAddrA < 0 ||
+        (picture->mb_list[mbAddrA].mb_pred_type == Pred_L0 || picture->mb_list[mbAddrA].mb_pred_type == Pred_L1 || picture->mb_list[mbAddrA].mb_pred_type == BiPred) ||
+        picture->mb_list[mbAddrA].mb_type_name == I_PCM || picture->mb_list[mbAddrA].intra_chroma_pred_mode == 0) {
+        condTermFlagA = 0;
+    } else {
+        condTermFlagA = 1;
+    }
+
+    if (mbAddrB < 0 ||
+        (picture->mb_list[mbAddrB].mb_pred_type == Pred_L0 || picture->mb_list[mbAddrB].mb_pred_type == Pred_L1 || picture->mb_list[mbAddrB].mb_pred_type == BiPred) ||
+        picture->mb_list[mbAddrB].mb_type_name == I_PCM || picture->mb_list[mbAddrB].intra_chroma_pred_mode == 0) {
+        condTermFlagB = 0;
+    } else {
+        condTermFlagB = 1;
+    }
+
+    *out_ctxIdxInc = condTermFlagA + condTermFlagB;
+
+    return ERR_OK;
+}
+
+/* 9.3.3.1.1.9 Derivation process of ctxIdxInc for the syntax element coded_block_flag */
+int derivation_for_ctxIdxInc_coded_block_flag(FrameOrField* picture, SliceHeader* slice_header, int32_t CurrMbAddr, int32_t ctxBlockCat, int32_t xBlkIdx, int32_t iCbCr,
+                                              int32_t* out_ctxIdxInc) {
+    /*
+     * Input to this process is ctxBlockCat and additional input is specified as follows:
+     *  – If ctxBlockCat is equal to 0, 6, or 10, no additional input.
+     *  – Otherwise, if ctxBlockCat is equal to 1 or 2, luma4x4BlkIdx.
+     *  – Otherwise, if ctxBlockCat is equal to 3, the chroma component index iCbCr.
+     *  – Otherwise, if ctxBlockCat is equal to 4, chroma4x4BlkIdx and the chroma component index iCbCr.
+     *  – Otherwise, if ctxBlockCat is equal to 5, luma8x8BlkIdx.
+     *  – Otherwise, if ctxBlockCat is equal to 7 or 8, cb4x4BlkIdx.
+     *  – Otherwise, if ctxBlockCat is equal to 9, cb8x8BlkIdx.
+     *  – Otherwise, if ctxBlockCat is equal to 11 or 12, cr4x4BlkIdx.
+     *  – Otherwise (ctxBlockCat is equal to 13), cr8x8BlkIdx.
+     *
+     * Output of this process is ctxIdxInc( ctxBlockCat ).
+     */
+
+    int err_code = ERR_OK;
+
+    return ERR_OK;
+}
+
 /* 9.3.3.1.1.10 Derivation process of ctxIdxInc for the syntax element transform_size_8x8_flag */
 int derivation_for_ctxIdxInc_transform_size_8x8_flag(FrameOrField* picture, SliceHeader* slice_header, int32_t CurrMbAddr, int32_t ctxIdxOffset, int32_t* out_ctxIdxInc) {
     int err_code = ERR_OK;
@@ -1623,9 +1852,9 @@ int cabac_mb_type_for_SI_slices(RBSPReader* rbsp_reader, CABAC* cabac, FrameOrFi
 
     /* For macroblock types in SI slices, the binarization consists of bin strings specified as a concatenation of a prefix and a suffix bit string as follows. */
 
-    /* The prefix bit string consists of a single bit, which is specified by b0 = ( ( mb_type = = SI ) ? 0 : 1 ). For the syntax element value for which b0 is equal to 0, the bin
-     * string only consists of the prefix bit string. For the syntax element value for which b0 is equal to 1, the binarization is given by concatenating the prefix b0 and the
-     * suffix bit string as specified in Table 9-36 for macroblock type in I slices indexed by subtracting 1 from the value of mb_type in SI slices. */
+    /* The prefix bit string consists of a single bit, which is specified by b0 = ( ( mb_type = = SI ) ? 0 : 1 ). For the syntax element value for which b0 is equal to 0, the
+     * bin string only consists of the prefix bit string. For the syntax element value for which b0 is equal to 1, the binarization is given by concatenating the prefix b0 and
+     * the suffix bit string as specified in Table 9-36 for macroblock type in I slices indexed by subtracting 1 from the value of mb_type in SI slices. */
 
     if (binVal == 0) {
         *out_syntax_element = 0; /*0 (I_NxN) */

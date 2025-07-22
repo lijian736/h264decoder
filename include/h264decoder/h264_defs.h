@@ -1051,6 +1051,7 @@ typedef struct {
     int32_t transform_size_8x8_flag;
     int32_t coded_block_pattern;
     int32_t mb_qp_delta;
+    int32_t intra_chroma_pred_mode;
 
     H264_MB_PART_PRED_MODE mb_pred_type;
 
@@ -1061,6 +1062,17 @@ typedef struct {
 
     uint32_t pcm_sample_luma[256];
     uint32_t pcm_sample_chroma[512];
+
+    int32_t     prev_intra4x4_pred_mode_flag[16];
+    int32_t     rem_intra4x4_pred_mode[16];
+
+    int32_t     prev_intra8x8_pred_mode_flag[4];
+    int32_t     rem_intra8x8_pred_mode[4];
+
+    int32_t     i16x16DClevel[16];
+    int32_t     i16x16AClevel[16][16];
+    int32_t     level4x4[16][16];
+    int32_t     level8x8[4][64];
 
     MB_TYPE_NAME sub_mb_type_name[4];
 } MacroBlock;

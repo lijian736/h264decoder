@@ -257,6 +257,64 @@ int cabac_coded_block_pattern(RBSPReader* rbsp_reader, CABAC* cabac, FrameOrFiel
 int cabac_mb_qp_delta(RBSPReader* rbsp_reader, CABAC* cabac, FrameOrField* picture, SliceHeader* slice_header, int32_t CurrMbAddr, int32_t* out_syntax_element);
 
 /**
+ * @brief decode prev_intra4x4_pred_mode_flag or prev_intra8x8_pred_mode_flag
+ *
+ * @see Table 9-34 – Syntax elements and associated types of binarization, maxBinIdxCtx, and ctxIdxOffset
+ * @see Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag,
+ * last_significant_coeff_flag, and coeff_abs_level_minus1
+ *
+ * @param rbsp_reader the RBSPReader
+ * @param cabac the cabac
+ * @param out_syntax_element output parameter. the syntax element value
+ * @return int 0 on success, negative value on error
+ */
+int cabac_prev_intra4x4_or_intra8x8_pred_mode_flag(RBSPReader* rbsp_reader, CABAC* cabac, int32_t* out_syntax_element);
+
+/**
+ * @brief decode rem_intra4x4_pred_mode or rem_intra8x8_pred_mode
+ *
+ * @param rbsp_reader the RBSPReader
+ * @param cabac the cabac
+ * @param out_syntax_element output parameter. the syntax element value
+ * @return int 0 on success, negative value on error
+ */
+int cabac_rem_intra4x4_or_intra8x8_pred_mode(RBSPReader* rbsp_reader, CABAC* cabac, int32_t* out_syntax_element);
+
+/**
+ * @brief decode intra_chroma_pred_mode
+ *
+ * @see Table 9-34 – Syntax elements and associated types of binarization, maxBinIdxCtx, and ctxIdxOffset
+ * @see Table 9-39 – Assignment of ctxIdxInc to binIdx for all ctxIdxOffset values except those related to the syntax elements coded_block_flag, significant_coeff_flag,
+ * last_significant_coeff_flag, and coeff_abs_level_minus1
+ *
+ * @param rbsp_reader the RBSPReader
+ * @param cabac the cabac
+ * @param picture the FrameOrField data
+ * @param slice_header the slice header
+ * @param CurrMbAddr the current macroblock address
+ * @param out_syntax_element output parameter. the syntax element value
+ * @return int 0 on success, negative value on error
+ */
+int cabac_intra_chroma_pred_mode(RBSPReader* rbsp_reader, CABAC* cabac, FrameOrField* picture, SliceHeader* slice_header, int32_t CurrMbAddr, int32_t* out_syntax_element);
+
+/**
+ * @brief decode coded_block_flag
+ * 
+ * @param rbsp_reader the RBSPReader
+ * @param cabac the cabac
+ * @param picture the FrameOrField data
+ * @param slice_header the slice header
+ * @param CurrMbAddr the current macroblock address
+ * @param ctxBlockCat the context block categories
+ * @param xBlkIdx the x block index
+ * @param iCbCr the index of Cb or Cr
+ * @param out_syntax_element output parameter. the syntax element value
+ * @return int 0 on success, negative value on error 
+ */
+int cabac_coded_block_flag(RBSPReader* rbsp_reader, CABAC* cabac, FrameOrField* picture, SliceHeader* slice_header, int32_t CurrMbAddr, int32_t ctxBlockCat, int32_t xBlkIdx,
+                           int32_t iCbCr, int32_t* out_syntax_element);
+
+/**
  * @brief decode binary value
  * @see 9.3.3.2 Arithmetic decoding process
  *
@@ -389,6 +447,47 @@ int derivation_for_ctxIdxInc_coded_block_pattern(FrameOrField* picture, SliceHea
  * @return int 0 on success, negative value on error
  */
 int derivation_for_ctxIdxInc_mb_qp_delta(FrameOrField* picture, SliceHeader* slice_header, int32_t CurrMbAddr, int32_t* out_ctxIdxInc);
+
+/**
+ * @brief Derivation process of ctxIdxInc for the syntax element intra_chroma_pred_mode
+ * @see 9.3.3.1.1.8 Derivation process of ctxIdxInc for the syntax element intra_chroma_pred_mode
+ *
+ * @param picture the FrameOrField data
+ * @param slice_header the slice header
+ * @param CurrMbAddr the current macroblock address
+ * @param out_ctxIdxInc output parameter. the ctxIdxInc
+ * @return int 0 on success, negative value on error
+ */
+int derivation_for_ctxIdxInc_intra_chroma_pred_mode(FrameOrField* picture, SliceHeader* slice_header, int32_t CurrMbAddr, int32_t* out_ctxIdxInc);
+
+/**
+ * @brief Derivation process of ctxIdxInc for the syntax element coded_block_flag
+ * @see 9.3.3.1.1.9 Derivation process of ctxIdxInc for the syntax element coded_block_flag
+ *
+ * Input to this process is ctxBlockCat and additional input is specified as follows:
+ *  – If ctxBlockCat is equal to 0, 6, or 10, no additional input.
+ *  – Otherwise, if ctxBlockCat is equal to 1 or 2, luma4x4BlkIdx.
+ *  – Otherwise, if ctxBlockCat is equal to 3, the chroma component index iCbCr.
+ *  – Otherwise, if ctxBlockCat is equal to 4, chroma4x4BlkIdx and the chroma component index iCbCr.
+ *  – Otherwise, if ctxBlockCat is equal to 5, luma8x8BlkIdx.
+ *  – Otherwise, if ctxBlockCat is equal to 7 or 8, cb4x4BlkIdx.
+ *  – Otherwise, if ctxBlockCat is equal to 9, cb8x8BlkIdx.
+ *  – Otherwise, if ctxBlockCat is equal to 11 or 12, cr4x4BlkIdx.
+ *  – Otherwise (ctxBlockCat is equal to 13), cr8x8BlkIdx.
+ *
+ * Output of this process is ctxIdxInc( ctxBlockCat ).
+ *
+ * @param picture the FrameOrField data
+ * @param slice_header the slice header
+ * @param CurrMbAddr the current macroblock address
+ * @param ctxBlockCat the context block categories
+ * @param xBlkIdx the x block index
+ * @param iCbCr the index of Cb or Cr
+ * @param out_ctxIdxInc output parameter. the ctxIdxInc
+ * @return int 0 on success, negative value on error
+ */
+int derivation_for_ctxIdxInc_coded_block_flag(FrameOrField* picture, SliceHeader* slice_header, int32_t CurrMbAddr, int32_t ctxBlockCat, int32_t xBlkIdx, int32_t iCbCr,
+                                              int32_t* out_ctxIdxInc);
 
 /**
  * @brief Derivation process of ctxIdxInc for the syntax element transform_size_8x8_flag
