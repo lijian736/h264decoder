@@ -405,6 +405,10 @@ static const int32_t transIdxLPS[64] = {0,  0,  1,  2,  2,  4,  4,  5,  6,  7,  
 static const int32_t transIdxMPS[64] = {1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
                                         33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 62, 63};
 
+/* @see Table 9-40 – Assignment of ctxIdxBlockCatOffset to ctxBlockCat for syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and
+ * coeff_abs_level_minus1 */
+static const int32_t g_coded_block_flag_ctxIdxBlockCatOffset[14] = {0, 4, 8, 12, 16, 0, 0, 4, 8, 4, 0, 4, 8, 8};
+
 static CABAC g_cabac_instance;
 
 CABAC* get_singleton_cabac() { return &g_cabac_instance; }
@@ -1143,8 +1147,12 @@ int cabac_coded_block_pattern(RBSPReader* rbsp_reader, CABAC* cabac, FrameOrFiel
 int cabac_coded_block_flag(RBSPReader* rbsp_reader, CABAC* cabac, FrameOrField* picture, SliceHeader* slice_header, int32_t CurrMbAddr, int32_t ctxBlockCat, int32_t xBlkIdx,
                            int32_t iCbCr, int32_t* out_syntax_element) {
     int err_code = ERR_OK;
+    int32_t maxBinIdxCtx = 0;
+    int32_t ctxIdxOffset = 0;
 
     /* Table 9-34 – Syntax elements and associated types of binarization, maxBinIdxCtx, and ctxIdxOffset */
+    /* Table 9-40 – Assignment of ctxIdxBlockCatOffset to ctxBlockCat for syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and
+     * coeff_abs_level_minus1 */
 
     /* (blocks with ctxBlockCat < 5)*/
     /* Type of binarization: FL, cMax=1 */
@@ -1166,6 +1174,19 @@ int cabac_coded_block_flag(RBSPReader* rbsp_reader, CABAC* cabac, FrameOrField* 
     /* maxBinIdxCtx: 0 */
     /* ctxIdxOffset: 1012 */
 
+    if (ctxBlockCat < 5) {
+        ctxIdxOffset = 85;
+    } else if (ctxBlockCat > 5 && ctxBlockCat < 9) {
+        ctxIdxOffset = 460;
+    } else if (ctxBlockCat > 9 && ctxBlockCat < 13) {
+        ctxIdxOffset = 472;
+    } else if (ctxBlockCat == 5 || ctxBlockCat == 9 || ctxBlockCat == 13) {
+        ctxIdxOffset = 1012;
+    } else {
+        return ERR_CTX_BLOCK_CATEGORY;
+    }
+
+    int32_t ctxIdxBlockCatOffset = g_coded_block_flag_ctxIdxBlockCatOffset[ctxBlockCat];
 
     return ERR_OK;
 }
@@ -1544,6 +1565,318 @@ int derivation_for_ctxIdxInc_coded_block_flag(FrameOrField* picture, SliceHeader
      */
 
     int err_code = ERR_OK;
+    int32_t mbAddrA = 0;
+    int32_t mbAddrB = 0;
+    int32_t transBlockA = -1;
+    int32_t transBlockB = -1;
+
+    SPS* sps = slice_header->sps;
+    PPS* pps = slice_header->pps;
+
+    if (ctxBlockCat == 0 || ctxBlockCat == 6 || ctxBlockCat == 10) { /* If ctxBlockCat is equal to 0, 6, or 10, no additional input. */
+        int32_t is_chroma = (iCbCr < 0) ? 0 : 1;
+
+        /* 6.4.11.1 Derivation process for neighbouring macroblocks */
+        neighbouring_macroblocks(slice_header->MbaffFrameFlag, CurrMbAddr, !picture->mb_list[CurrMbAddr].mb_field_decoding_flag, sps->PicWidthInMbs, picture->mb_slice_ids,
+                                 picture->mb_frame_flags, is_chroma, sps->MbWidthC, sps->MbHeightC, &mbAddrA, &mbAddrB);
+
+        if (mbAddrA >= 0 && picture->mb_list[mbAddrA].mb_pred_type == Intra_16x16) {
+            /**
+             * – If ctxBlockCat is equal to 0, the luma DC block of macroblock mbAddrN is assigned to transBlockN.
+             * – Otherwise, if ctxBlockCat is equal to 6, the Cb DC block of macroblock mbAddrN is assigned to transBlockN.
+             * – Otherwise (ctxBlockCat is equal to 10), the Cr DC block of macroblock mbAddrN is assigned to transBlockN.
+             */
+
+            /* TODO */
+            transBlockA = 1;
+        } else {
+            transBlockA = -1; /* not available */
+        }
+
+        if (mbAddrB >= 0 && picture->mb_list[mbAddrB].mb_pred_type == Intra_16x16) {
+            /**
+             * – If ctxBlockCat is equal to 0, the luma DC block of macroblock mbAddrN is assigned to transBlockN.
+             * – Otherwise, if ctxBlockCat is equal to 6, the Cb DC block of macroblock mbAddrN is assigned to transBlockN.
+             * – Otherwise (ctxBlockCat is equal to 10), the Cr DC block of macroblock mbAddrN is assigned to transBlockN.
+             */
+
+            /* TODO */
+            transBlockB = 1;
+        } else {
+            transBlockB = -1; /* not available */
+        }
+    } else if (ctxBlockCat == 1 || ctxBlockCat == 2) { /* Otherwise, if ctxBlockCat is equal to 1 or 2, luma4x4BlkIdx. */
+
+        int32_t luma4x4BlkIdx = xBlkIdx;
+        int32_t luma4x4BlkIdxA = 0;
+        int32_t luma4x4BlkIdxB = 0;
+        /* 6.4.11.4 Derivation process for neighbouring 4x4 luma blocks */
+        neighbouring_4x4_luma_block(slice_header->MbaffFrameFlag, CurrMbAddr, !picture->mb_list[CurrMbAddr].mb_field_decoding_flag, sps->PicWidthInMbs, picture->mb_slice_ids,
+                                    picture->mb_frame_flags, luma4x4BlkIdx, &mbAddrA, &luma4x4BlkIdxA, &mbAddrB, &luma4x4BlkIdxB);
+
+        if (mbAddrA >= 0 && picture->mb_list[mbAddrA].mb_type_name != P_Skip && picture->mb_list[mbAddrA].mb_type_name != B_Skip &&
+            picture->mb_list[mbAddrA].mb_type_name != I_PCM && ((picture->mb_list[mbAddrA].CodedBlockPatternLuma >> (luma4x4BlkIdxA >> 2)) & 1) != 0 &&
+            picture->mb_list[mbAddrA].transform_size_8x8_flag == 0) {
+            /* TODO */
+            transBlockA = 1;
+        } else if (mbAddrA >= 0 && picture->mb_list[mbAddrA].mb_type_name != P_Skip && picture->mb_list[mbAddrA].mb_type_name != B_Skip &&
+                   ((picture->mb_list[mbAddrA].CodedBlockPatternLuma >> (luma4x4BlkIdxA >> 2)) & 1) != 0 && picture->mb_list[mbAddrA].transform_size_8x8_flag == 1) {
+            /* TODO */
+            transBlockA = 1;
+        } else {
+            transBlockA = -1;
+        }
+
+        if (mbAddrB >= 0 && picture->mb_list[mbAddrB].mb_type_name != P_Skip && picture->mb_list[mbAddrB].mb_type_name != B_Skip &&
+            picture->mb_list[mbAddrB].mb_type_name != I_PCM && ((picture->mb_list[mbAddrB].CodedBlockPatternLuma >> (luma4x4BlkIdxA >> 2)) & 1) != 0 &&
+            picture->mb_list[mbAddrB].transform_size_8x8_flag == 0) {
+            /* TODO */
+            transBlockB = 1;
+        } else if (mbAddrB >= 0 && picture->mb_list[mbAddrB].mb_type_name != P_Skip && picture->mb_list[mbAddrB].mb_type_name != B_Skip &&
+                   ((picture->mb_list[mbAddrB].CodedBlockPatternLuma >> (luma4x4BlkIdxA >> 2)) & 1) != 0 && picture->mb_list[mbAddrB].transform_size_8x8_flag == 1) {
+            /* TODO */
+            transBlockB = 1;
+        } else {
+            transBlockB = -1;
+        }
+    } else if (ctxBlockCat == 3) { /* Otherwise, if ctxBlockCat is equal to 3, the chroma component index iCbCr. */
+        int32_t is_chroma = (iCbCr < 0) ? 0 : 1;
+
+        /* 6.4.11.1 Derivation process for neighbouring macroblocks */
+        neighbouring_macroblocks(slice_header->MbaffFrameFlag, CurrMbAddr, !picture->mb_list[CurrMbAddr].mb_field_decoding_flag, sps->PicWidthInMbs, picture->mb_slice_ids,
+                                 picture->mb_frame_flags, is_chroma, sps->MbWidthC, sps->MbHeightC, &mbAddrA, &mbAddrB);
+
+        if (mbAddrA >= 0 && picture->mb_list[mbAddrA].mb_type_name != P_Skip && picture->mb_list[mbAddrA].mb_type_name != B_Skip &&
+            picture->mb_list[mbAddrA].mb_type_name != I_PCM && picture->mb_list[mbAddrA].CodedBlockPatternChroma != 0) {
+            /* TODO */
+            transBlockA = 1;
+        } else {
+            transBlockA = -1;
+        }
+
+        if (mbAddrB >= 0 && picture->mb_list[mbAddrB].mb_type_name != P_Skip && picture->mb_list[mbAddrB].mb_type_name != B_Skip &&
+            picture->mb_list[mbAddrB].mb_type_name != I_PCM && picture->mb_list[mbAddrB].CodedBlockPatternChroma != 0) {
+            /* TODO */
+            transBlockB = 1;
+        } else {
+            transBlockB = -1;
+        }
+    } else if (ctxBlockCat == 4) { /* Otherwise, if ctxBlockCat is equal to 4, chroma4x4BlkIdx and the chroma component index iCbCr. */
+        int32_t chroma4x4BlkIdx = xBlkIdx;
+        int32_t chroma4x4BlkIdxA = 0;
+        int32_t chroma4x4BlkIdxB = 0;
+
+        /* 6.4.11.5 Derivation process for neighbouring 4x4 chroma blocks */
+        neighbouring_4x4_chroma_block_ChromaArrayType_12(slice_header->MbaffFrameFlag, CurrMbAddr, !picture->mb_list[CurrMbAddr].mb_field_decoding_flag, sps->PicWidthInMbs,
+                                                         sps->MbWidthC, sps->MbHeightC, picture->mb_slice_ids, picture->mb_frame_flags, chroma4x4BlkIdx, &mbAddrA,
+                                                         &chroma4x4BlkIdxA, &mbAddrB, &chroma4x4BlkIdxB);
+
+        if (mbAddrA >= 0 && picture->mb_list[mbAddrA].mb_type_name != P_Skip && picture->mb_list[mbAddrA].mb_type_name != B_Skip &&
+            picture->mb_list[mbAddrA].mb_type_name != I_PCM && picture->mb_list[mbAddrA].CodedBlockPatternChroma == 2) {
+            /* TODO */
+            transBlockA = 1;
+        } else {
+            transBlockA = -1;
+        }
+
+        if (mbAddrB >= 0 && picture->mb_list[mbAddrB].mb_type_name != P_Skip && picture->mb_list[mbAddrB].mb_type_name != B_Skip &&
+            picture->mb_list[mbAddrB].mb_type_name != I_PCM && picture->mb_list[mbAddrB].CodedBlockPatternChroma == 2) {
+            /* TODO */
+            transBlockB = 1;
+        } else {
+            transBlockB = -1;
+        }
+    } else if (ctxBlockCat == 5) { /* Otherwise, if ctxBlockCat is equal to 5, luma8x8BlkIdx. */
+        int32_t luma8x8BlkIdx = xBlkIdx;
+
+        int32_t luma8x8BlkIdxA = 0;
+        int32_t luma8x8BlkIdxB = 0;
+        int32_t is_chroma = 0;
+
+        /* 6.4.11.2 Derivation process for neighbouring 8x8 luma block */
+        neighbouring_8x8_luma_block(slice_header->MbaffFrameFlag, CurrMbAddr, !picture->mb_list[CurrMbAddr].mb_field_decoding_flag, sps->PicWidthInMbs, picture->mb_slice_ids,
+                                    picture->mb_frame_flags, luma8x8BlkIdx, &mbAddrA, &luma8x8BlkIdxA, &mbAddrB, &luma8x8BlkIdxB);
+
+        if (mbAddrA >= 0 && picture->mb_list[mbAddrA].mb_type_name != P_Skip && picture->mb_list[mbAddrA].mb_type_name != B_Skip &&
+            picture->mb_list[mbAddrA].mb_type_name != I_PCM && ((picture->mb_list[mbAddrA].CodedBlockPatternLuma >> luma8x8BlkIdx) & 1) != 0 &&
+            picture->mb_list[mbAddrA].transform_size_8x8_flag == 1) {
+            /* TODO */
+            transBlockA = 1;
+        } else {
+            transBlockA = -1;
+        }
+
+        if (mbAddrB >= 0 && picture->mb_list[mbAddrB].mb_type_name != P_Skip && picture->mb_list[mbAddrB].mb_type_name != B_Skip &&
+            picture->mb_list[mbAddrB].mb_type_name != I_PCM && ((picture->mb_list[mbAddrB].CodedBlockPatternLuma >> luma8x8BlkIdx) & 1) != 0 &&
+            picture->mb_list[mbAddrB].transform_size_8x8_flag == 1) {
+            /* TODO */
+            transBlockB = 1;
+        } else {
+            transBlockB = -1;
+        }
+    } else if (ctxBlockCat == 7 || ctxBlockCat == 8) { /* Otherwise, if ctxBlockCat is equal to 7 or 8, cb4x4BlkIdx. */
+        int32_t cb4x4BlkIdx = xBlkIdx;
+        int32_t cb4x4BlkIdxA = 0;
+        int32_t cb4x4BlkIdxB = 0;
+
+        /* 6.4.11.5 Derivation process for neighbouring 4x4 chroma blocks */
+        neighbouring_4x4_chroma_block_ChromaArrayType_12(slice_header->MbaffFrameFlag, CurrMbAddr, !picture->mb_list[CurrMbAddr].mb_field_decoding_flag, sps->PicWidthInMbs,
+                                                         sps->MbWidthC, sps->MbHeightC, picture->mb_slice_ids, picture->mb_frame_flags, cb4x4BlkIdx, &mbAddrA, &cb4x4BlkIdxA,
+                                                         &mbAddrB, &cb4x4BlkIdxB);
+
+        if (mbAddrA >= 0 && picture->mb_list[mbAddrA].mb_type_name != P_Skip && picture->mb_list[mbAddrA].mb_type_name != B_Skip &&
+            picture->mb_list[mbAddrA].mb_type_name != I_PCM && ((picture->mb_list[mbAddrA].CodedBlockPatternLuma >> (cb4x4BlkIdxA >> 2)) & 1) != 0 &&
+            picture->mb_list[mbAddrA].transform_size_8x8_flag == 0) {
+            /* TODO */
+            transBlockA = 1;
+        } else if (mbAddrA >= 0 && picture->mb_list[mbAddrA].mb_type_name != P_Skip && picture->mb_list[mbAddrA].mb_type_name != B_Skip &&
+                   ((picture->mb_list[mbAddrA].CodedBlockPatternLuma >> (cb4x4BlkIdxA >> 2)) & 1) != 0 && picture->mb_list[mbAddrA].transform_size_8x8_flag == 1) {
+            /* TODO */
+            transBlockA = 1;
+        } else {
+            transBlockA = -1;
+        }
+
+        if (mbAddrB >= 0 && picture->mb_list[mbAddrB].mb_type_name != P_Skip && picture->mb_list[mbAddrB].mb_type_name != B_Skip &&
+            picture->mb_list[mbAddrB].mb_type_name != I_PCM && ((picture->mb_list[mbAddrB].CodedBlockPatternLuma >> (cb4x4BlkIdxA >> 2)) & 1) != 0 &&
+            picture->mb_list[mbAddrB].transform_size_8x8_flag == 0) {
+            /* TODO */
+            transBlockB = 1;
+        } else if (mbAddrB >= 0 && picture->mb_list[mbAddrB].mb_type_name != P_Skip && picture->mb_list[mbAddrB].mb_type_name != B_Skip &&
+                   ((picture->mb_list[mbAddrB].CodedBlockPatternLuma >> (cb4x4BlkIdxA >> 2)) & 1) != 0 && picture->mb_list[mbAddrB].transform_size_8x8_flag == 1) {
+            /* TODO */
+            transBlockB = 1;
+        } else {
+            transBlockB = -1;
+        }
+    } else if (ctxBlockCat == 9) { /* Otherwise, if ctxBlockCat is equal to 9, cb8x8BlkIdx. */
+        int32_t cb8x8BlkIdx = xBlkIdx;
+        int32_t cb8x8BlkIdxA = 0;
+        int32_t cb8x8BlkIdxB = 0;
+
+        /* 6.4.11.3 Derivation process for neighbouring 8x8 chroma blocks for ChromaArrayType equal to 3 */
+        neighbouring_8x8_chroma_block(slice_header->MbaffFrameFlag, CurrMbAddr, !picture->mb_list[CurrMbAddr].mb_field_decoding_flag, sps->PicWidthInMbs, sps->MbWidthC,
+                                      sps->MbHeightC, picture->mb_slice_ids, picture->mb_frame_flags, cb8x8BlkIdx, &mbAddrA, &cb8x8BlkIdxA, &mbAddrB, &cb8x8BlkIdxB);
+
+        if (mbAddrA >= 0 && picture->mb_list[mbAddrA].mb_type_name != P_Skip && picture->mb_list[mbAddrA].mb_type_name != B_Skip &&
+            picture->mb_list[mbAddrA].mb_type_name != I_PCM && ((picture->mb_list[mbAddrA].CodedBlockPatternLuma >> cb8x8BlkIdx) & 1) != 0 &&
+            picture->mb_list[mbAddrA].transform_size_8x8_flag == 1) {
+            /* TODO */
+            transBlockA = 1;
+        } else {
+            transBlockA = -1;
+        }
+
+        if (mbAddrB >= 0 && picture->mb_list[mbAddrB].mb_type_name != P_Skip && picture->mb_list[mbAddrB].mb_type_name != B_Skip &&
+            picture->mb_list[mbAddrB].mb_type_name != I_PCM && ((picture->mb_list[mbAddrB].CodedBlockPatternLuma >> cb8x8BlkIdx) & 1) != 0 &&
+            picture->mb_list[mbAddrB].transform_size_8x8_flag == 1) {
+            /* TODO */
+            transBlockB = 1;
+        } else {
+            transBlockB = -1;
+        }
+    } else if (ctxBlockCat == 11 || ctxBlockCat == 12) { /* Otherwise, if ctxBlockCat is equal to 11 or 12, cr4x4BlkIdx. */
+
+        int32_t cr4x4BlkIdx = xBlkIdx;
+        int32_t cr4x4BlkIdxA = 0;
+        int32_t cr4x4BlkIdxB = 0;
+
+        /* 6.4.11.5 Derivation process for neighbouring 4x4 chroma blocks */
+        neighbouring_4x4_chroma_block_ChromaArrayType_12(slice_header->MbaffFrameFlag, CurrMbAddr, !picture->mb_list[CurrMbAddr].mb_field_decoding_flag, sps->PicWidthInMbs,
+                                                         sps->MbWidthC, sps->MbHeightC, picture->mb_slice_ids, picture->mb_frame_flags, cr4x4BlkIdx, &mbAddrA, &cr4x4BlkIdxA,
+                                                         &mbAddrB, &cr4x4BlkIdxB);
+
+        if (mbAddrA >= 0 && picture->mb_list[mbAddrA].mb_type_name != P_Skip && picture->mb_list[mbAddrA].mb_type_name != B_Skip &&
+            picture->mb_list[mbAddrA].mb_type_name != I_PCM && ((picture->mb_list[mbAddrA].CodedBlockPatternLuma >> (cr4x4BlkIdxA >> 2)) & 1) != 0 &&
+            picture->mb_list[mbAddrA].transform_size_8x8_flag == 0) {
+            /*TODO*/
+            transBlockA = 1;
+        } else if (mbAddrA >= 0 && picture->mb_list[mbAddrA].mb_type_name != P_Skip && picture->mb_list[mbAddrA].mb_type_name != B_Skip &&
+                   ((picture->mb_list[mbAddrA].CodedBlockPatternLuma >> (cr4x4BlkIdxA >> 2)) & 1) != 0 && picture->mb_list[mbAddrA].transform_size_8x8_flag == 1) {
+            /*TODO*/
+            transBlockA = 1;
+        } else {
+            transBlockA = -1;
+        }
+
+        if (mbAddrB >= 0 && picture->mb_list[mbAddrB].mb_type_name != P_Skip && picture->mb_list[mbAddrB].mb_type_name != B_Skip &&
+            picture->mb_list[mbAddrB].mb_type_name != I_PCM && ((picture->mb_list[mbAddrB].CodedBlockPatternLuma >> (cr4x4BlkIdxA >> 2)) & 1) != 0 &&
+            picture->mb_list[mbAddrB].transform_size_8x8_flag == 0) {
+            /*TODO*/
+            transBlockB = 1;
+        } else if (mbAddrB >= 0 && picture->mb_list[mbAddrB].mb_type_name != P_Skip && picture->mb_list[mbAddrB].mb_type_name != B_Skip &&
+                   ((picture->mb_list[mbAddrB].CodedBlockPatternLuma >> (cr4x4BlkIdxA >> 2)) & 1) != 0 && picture->mb_list[mbAddrB].transform_size_8x8_flag == 1) {
+            /*TODO*/
+            transBlockB = 1;
+        } else {
+            transBlockB = -1;
+        }
+    } else { /* Otherwise (ctxBlockCat is equal to 13), cr8x8BlkIdx.*/
+        int32_t cr8x8BlkIdx = xBlkIdx;
+        int32_t cr8x8BlkIdxA = 0;
+        int32_t cr8x8BlkIdxB = 0;
+
+        /* 6.4.11.3 Derivation process for neighbouring 8x8 chroma blocks for ChromaArrayType equal to 3 */
+        neighbouring_8x8_chroma_block(slice_header->MbaffFrameFlag, CurrMbAddr, !picture->mb_list[CurrMbAddr].mb_field_decoding_flag, sps->PicWidthInMbs, sps->MbWidthC,
+                                      sps->MbHeightC, picture->mb_slice_ids, picture->mb_frame_flags, cr8x8BlkIdx, &mbAddrA, &cr8x8BlkIdxA, &mbAddrB, &cr8x8BlkIdxB);
+
+        if (mbAddrA >= 0 && picture->mb_list[mbAddrA].mb_type_name != P_Skip && picture->mb_list[mbAddrA].mb_type_name != B_Skip &&
+            picture->mb_list[mbAddrA].mb_type_name != I_PCM && ((picture->mb_list[mbAddrA].CodedBlockPatternLuma >> cr8x8BlkIdx) & 1) != 0 &&
+            picture->mb_list[mbAddrA].transform_size_8x8_flag == 1) {
+            /* TODO */
+            transBlockA = 1;
+        } else {
+            transBlockA = -1;
+        }
+
+        if (mbAddrB >= 0 && picture->mb_list[mbAddrB].mb_type_name != P_Skip && picture->mb_list[mbAddrB].mb_type_name != B_Skip &&
+            picture->mb_list[mbAddrB].mb_type_name != I_PCM && ((picture->mb_list[mbAddrB].CodedBlockPatternLuma >> cr8x8BlkIdx) & 1) != 0 &&
+            picture->mb_list[mbAddrB].transform_size_8x8_flag == 1) {
+            /* TODO */
+            transBlockB = 1;
+        } else {
+            transBlockB = -1;
+        }
+    }
+
+    int32_t condTermFlagA = 0;
+    int32_t condTermFlagB = 0;
+
+    if ((mbAddrA < 0 &&
+         (picture->mb_list[mbAddrA].mb_pred_type == Pred_L0 || picture->mb_list[mbAddrA].mb_pred_type == Pred_L1 || picture->mb_list[mbAddrA].mb_pred_type == BiPred)) ||
+        (mbAddrA >= 0 && transBlockB == -1 && picture->mb_list[mbAddrA].mb_pred_type != I_PCM) ||
+        ((picture->mb_list[mbAddrA].mb_pred_type == Pred_L0 || picture->mb_list[mbAddrA].mb_pred_type == Pred_L1 || picture->mb_list[mbAddrA].mb_pred_type == BiPred) &&
+         picture->mb_list[CurrMbAddr].constrained_intra_pred_flag == 1 && mbAddrA >= 0 &&
+         (picture->mb_list[mbAddrA].mb_pred_type == Pred_L0 || picture->mb_list[mbAddrA].mb_pred_type == Pred_L1 || picture->mb_list[mbAddrA].mb_pred_type == BiPred) &&
+         (slice_header->nalu_header.nal_unit_type >= 2 && slice_header->nalu_header.nal_unit_type <= 4))) {
+        condTermFlagA = 0;
+    } else if (mbAddrA < 0 &&
+                   (picture->mb_list[mbAddrA].mb_pred_type == Pred_L0 || picture->mb_list[mbAddrA].mb_pred_type == Pred_L1 || picture->mb_list[mbAddrA].mb_pred_type == BiPred) ||
+               picture->mb_list[mbAddrA].mb_type_name == I_PCM) {
+        condTermFlagA = 1;
+    } else {
+        /*TODO*/
+        condTermFlagA = 0;
+    }
+
+    if ((mbAddrB < 0 &&
+         (picture->mb_list[mbAddrB].mb_pred_type == Pred_L0 || picture->mb_list[mbAddrB].mb_pred_type == Pred_L1 || picture->mb_list[mbAddrB].mb_pred_type == BiPred)) ||
+        (mbAddrB >= 0 && transBlockB == -1 && picture->mb_list[mbAddrB].mb_pred_type != I_PCM) ||
+        ((picture->mb_list[mbAddrB].mb_pred_type == Pred_L0 || picture->mb_list[mbAddrB].mb_pred_type == Pred_L1 || picture->mb_list[mbAddrB].mb_pred_type == BiPred) &&
+         picture->mb_list[CurrMbAddr].constrained_intra_pred_flag == 1 && mbAddrB >= 0 &&
+         (picture->mb_list[mbAddrB].mb_pred_type == Pred_L0 || picture->mb_list[mbAddrB].mb_pred_type == Pred_L1 || picture->mb_list[mbAddrB].mb_pred_type == BiPred) &&
+         (slice_header->nalu_header.nal_unit_type >= 2 && slice_header->nalu_header.nal_unit_type <= 4))) {
+        condTermFlagB = 0;
+    } else if (mbAddrB < 0 &&
+                   (picture->mb_list[mbAddrB].mb_pred_type == Pred_L0 || picture->mb_list[mbAddrB].mb_pred_type == Pred_L1 || picture->mb_list[mbAddrB].mb_pred_type == BiPred) ||
+               picture->mb_list[mbAddrB].mb_type_name == I_PCM) {
+        condTermFlagB = 1;
+    } else {
+        /*TODO*/
+        condTermFlagB = 0;
+    }
+
+    *out_ctxIdxInc = condTermFlagA + 2 * condTermFlagB;
 
     return ERR_OK;
 }

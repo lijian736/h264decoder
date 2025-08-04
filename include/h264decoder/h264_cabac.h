@@ -300,6 +300,9 @@ int cabac_intra_chroma_pred_mode(RBSPReader* rbsp_reader, CABAC* cabac, FrameOrF
 /**
  * @brief decode coded_block_flag
  * 
+ * @see Table 9-34 – Syntax elements and associated types of binarization, maxBinIdxCtx, and ctxIdxOffset
+ * @see Table 9-40 – Assignment of ctxIdxBlockCatOffset to ctxBlockCat for syntax elements coded_block_flag, significant_coeff_flag, last_significant_coeff_flag, and coeff_abs_level_minus1
+ * 
  * @param rbsp_reader the RBSPReader
  * @param cabac the cabac
  * @param picture the FrameOrField data

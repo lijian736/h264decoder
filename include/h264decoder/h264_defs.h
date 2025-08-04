@@ -1059,6 +1059,7 @@ typedef struct {
 
     int32_t CodedBlockPatternLuma;
     int32_t CodedBlockPatternChroma;
+    int32_t constrained_intra_pred_flag;
 
     uint32_t pcm_sample_luma[256];
     uint32_t pcm_sample_chroma[512];

@@ -121,4 +121,7 @@
 /* invalid ctxIdxOffset for coded_block_pattern*/
 #define ERR_INVALID_CTXIDXOFFSET_4_CODED_BLOCK_PATTERN  (-2040)
 
+/* invalid context block category */
+#define ERR_CTX_BLOCK_CATEGORY (-2041)
+
 #endif
